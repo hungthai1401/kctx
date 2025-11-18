@@ -264,8 +264,8 @@ interactive_mode() {
         return 0
     fi
     
-    # Extract the config name (remove "(current)" suffix if present)
-    selected_config=$(echo "$selected_config" | sed 's/ (current)$//')
+    # Extract the config name (remove "(current)" suffix and extension if present)
+    selected_config=$(echo "$selected_config" | sed 's/ (current)$//' | sed 's/\.\(yaml\|yml\)$//')
     
     if [[ -n "$selected_config" ]]; then
         switch_config "$selected_config"

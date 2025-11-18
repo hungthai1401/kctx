@@ -4,9 +4,9 @@
 
 set -euo pipefail
 
-SCRIPT_NAME="kubeconfig-switcher.sh"
+SCRIPT_NAME="kctx"
 INSTALL_DIR="/usr/local/bin"
-BINARY_NAME="kubeconfig-switcher"
+BINARY_NAME="kctx"
 
 # Colors
 GREEN='\033[0;32m'

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# kubeconfig-switcher.sh
+# kctx
 # A script to quickly switch between multiple kubeconfig files
 
 set -euo pipefail

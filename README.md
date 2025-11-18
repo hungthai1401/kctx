@@ -1,4 +1,4 @@
-# Kubeconfig Switcher
+# Kubeconfig Switcher (kctx)
 
 A bash script to quickly switch between multiple kubeconfig files stored in `~/.kube/configs` directory.
 
@@ -17,17 +17,22 @@ A bash script to quickly switch between multiple kubeconfig files stored in `~/.
 
 1. Download the script:
    ```bash
-   curl -O https://raw.githubusercontent.com/your-repo/kubeconfig-switcher/main/kubeconfig-switcher.sh
+   curl -O https://raw.githubusercontent.com/your-repo/kubeconfig-switcher/main/kctx
    ```
 
 2. Make it executable:
    ```bash
-   chmod +x kubeconfig-switcher.sh
+   chmod +x kctx
    ```
 
 3. Move it to a directory in your PATH (optional):
    ```bash
-   mv kubeconfig-switcher.sh /usr/local/bin/kubeconfig-switcher
+   mv kctx /usr/local/bin/kctx
+   ```
+
+Or use the provided installation script:
+   ```bash
+   ./install.sh
    ```
 
 ## Setup
@@ -52,29 +57,29 @@ A bash script to quickly switch between multiple kubeconfig files stored in `~/.
 
 ```bash
 # Interactive mode (default)
-./kubeconfig-switcher.sh
+./kctx
 
 # Switch to a specific config
-./kubeconfig-switcher.sh prod
+./kctx prod
 
 # List all available configs
-./kubeconfig-switcher.sh --list
+./kctx --list
 
 # Show current active config
-./kubeconfig-switcher.sh --current
+./kctx --current
 
 # Show help
-./kubeconfig-switcher.sh --help
+./kctx --help
 ```
 
 ### Interactive Mode with fzf
 
 ```bash
 # Explicit interactive mode
-./kubeconfig-switcher.sh --interactive
+./kctx --interactive
 
 # Or just run without arguments
-./kubeconfig-switcher.sh
+./kctx
 ```
 
 The interactive mode uses fzf for fuzzy selection and shows the currently active config.
@@ -114,10 +119,10 @@ cp staging-kubeconfig.yaml ~/.kube/configs/staging.yaml
 cp development-kubeconfig.yaml ~/.kube/configs/dev.yaml
 
 # Switch to production
-./kubeconfig-switcher.sh prod
+./kctx prod
 
 # List all configs
-./kubeconfig-switcher.sh --list
+./kctx --list
 ```
 
 ### Using with shell aliases
@@ -125,7 +130,7 @@ cp development-kubeconfig.yaml ~/.kube/configs/dev.yaml
 Add this to your `~/.bashrc` or `~/.zshrc`:
 
 ```bash
-alias kswitch='./kubeconfig-switcher.sh'
+alias kswitch='./kctx'
 ```
 
 Then you can use:

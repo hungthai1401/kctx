@@ -30,11 +30,6 @@ A bash script to quickly switch between multiple kubeconfig files stored in `~/.
    mv kctx /usr/local/bin/kctx
    ```
 
-Or use the provided installation script:
-   ```bash
-   ./install.sh
-   ```
-
 ## Setup
 
 1. Create the configs directory:
@@ -57,29 +52,29 @@ Or use the provided installation script:
 
 ```bash
 # Interactive mode (default)
-./kctx
+kctx
 
 # Switch to a specific config
-./kctx prod
+kctx prod
 
 # List all available configs
-./kctx --list
+kctx --list
 
 # Show current active config
-./kctx --current
+kctx --current
 
 # Show help
-./kctx --help
+kctx --help
 ```
 
 ### Interactive Mode with fzf
 
 ```bash
-# Explicit interactive mode
-./kctx --interactive
+# Just run kctx (defaults to interactive mode)
+kctx
 
-# Or just run without arguments
-./kctx
+# Or explicitly request interactive mode
+kctx --interactive
 ```
 
 The interactive mode uses fzf for fuzzy selection and shows the currently active config.
@@ -119,10 +114,10 @@ cp staging-kubeconfig.yaml ~/.kube/configs/staging.yaml
 cp development-kubeconfig.yaml ~/.kube/configs/dev.yaml
 
 # Switch to production
-./kctx prod
+kctx prod
 
 # List all configs
-./kctx --list
+kctx --list
 ```
 
 ### Using with shell aliases
@@ -130,7 +125,7 @@ cp development-kubeconfig.yaml ~/.kube/configs/dev.yaml
 Add this to your `~/.bashrc` or `~/.zshrc`:
 
 ```bash
-alias kswitch='./kctx'
+alias kswitch='kctx'
 ```
 
 Then you can use:

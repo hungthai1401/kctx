@@ -196,13 +196,6 @@ switch_config() {
         fi
     fi
     
-    # Backup existing config if it exists and is not a symlink
-    if [[ -f "$DEFAULT_CONFIG" && ! -L "$DEFAULT_CONFIG" ]]; then
-        local backup_file="${DEFAULT_CONFIG}.backup.$(date +%Y%m%d_%H%M%S)"
-        print_warning "Backing up existing config to: $backup_file"
-        cp "$DEFAULT_CONFIG" "$backup_file"
-    fi
-    
     # Create symlink to the selected config
     ln -sf "$config_file" "$DEFAULT_CONFIG"
     

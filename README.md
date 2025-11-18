@@ -120,21 +120,6 @@ kctx prod
 kctx --list
 ```
 
-### Using with shell aliases
-
-Add this to your `~/.bashrc` or `~/.zshrc`:
-
-```bash
-alias kswitch='kctx'
-```
-
-Then you can use:
-```bash
-kswitch prod
-kswitch --list
-kswitch
-```
-
 ## Error Handling
 
 The script includes comprehensive error handling for:
@@ -144,13 +129,6 @@ The script includes comprehensive error handling for:
 - Non-existent config files
 - Invalid command line arguments
 - Missing optional dependencies
-
-## Backups
-
-When switching configs, if `~/.kube/config` exists and is not a symlink, the script automatically creates a backup with a timestamp:
-```
-~/.kube/config.backup.20231118_143022
-```
 
 ## Troubleshooting
 

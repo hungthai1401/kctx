@@ -181,16 +181,26 @@ switch_config() {
         clean_config_name="${config_name%.yml}"
     fi
     
-    # Find the config file (check both regular files and symlinks)
+    # Get list of available configs and check if the requested one exists
+    local available_configs
+    available_configs=$(get_available_configs)
+    
+    if ! echo "$available_configs" | grep -q "^${clean_config_name}$"; then
+        print_error "Config file not found: $config_name"
+        print_info "Available configs:"
+        list_configs
+        return 1
+    fi
+    
+    # Find the actual config file (check both extensions)
     local config_file=""
     if [[ -f "$CONFIGS_DIR/$clean_config_name.yaml" ]] || [[ -L "$CONFIGS_DIR/$clean_config_name.yaml" ]]; then
         config_file="$CONFIGS_DIR/$clean_config_name.yaml"
     elif [[ -f "$CONFIGS_DIR/$clean_config_name.yml" ]] || [[ -L "$CONFIGS_DIR/$clean_config_name.yml" ]]; then
         config_file="$CONFIGS_DIR/$clean_config_name.yml"
     else
-        print_error "Config file not found: $config_name"
-        print_info "Available configs:"
-        list_configs
+        # This should not happen since we already checked with get_available_configs
+        print_error "Config file disappeared: $config_name"
         return 1
     fi
     

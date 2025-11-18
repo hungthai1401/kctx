@@ -173,12 +173,20 @@ switch_config() {
     local config_name="$1"
     ensure_configs_dir
     
+    # Strip extension if provided (handle both .yaml and .yml)
+    local clean_config_name="$config_name"
+    if [[ "$config_name" == *.yaml ]]; then
+        clean_config_name="${config_name%.yaml}"
+    elif [[ "$config_name" == *.yml ]]; then
+        clean_config_name="${config_name%.yml}"
+    fi
+    
     # Find the config file (check both regular files and symlinks)
     local config_file=""
-    if [[ -f "$CONFIGS_DIR/$config_name.yaml" ]] || [[ -L "$CONFIGS_DIR/$config_name.yaml" ]]; then
-        config_file="$CONFIGS_DIR/$config_name.yaml"
-    elif [[ -f "$CONFIGS_DIR/$config_name.yml" ]] || [[ -L "$CONFIGS_DIR/$config_name.yml" ]]; then
-        config_file="$CONFIGS_DIR/$config_name.yml"
+    if [[ -f "$CONFIGS_DIR/$clean_config_name.yaml" ]] || [[ -L "$CONFIGS_DIR/$clean_config_name.yaml" ]]; then
+        config_file="$CONFIGS_DIR/$clean_config_name.yaml"
+    elif [[ -f "$CONFIGS_DIR/$clean_config_name.yml" ]] || [[ -L "$CONFIGS_DIR/$clean_config_name.yml" ]]; then
+        config_file="$CONFIGS_DIR/$clean_config_name.yml"
     else
         print_error "Config file not found: $config_name"
         print_info "Available configs:"
@@ -199,7 +207,7 @@ switch_config() {
     # Create symlink to the selected config
     ln -sf "$config_file" "$DEFAULT_CONFIG"
     
-    print_success "Switched to config: $config_name"
+    print_success "Switched to config: $clean_config_name"
     print_info "Active config file: $DEFAULT_CONFIG -> $config_file"
     
     # Update KUBECONFIG environment variable for current session

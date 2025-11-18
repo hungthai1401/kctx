@@ -1,0 +1,319 @@
+#!/bin/bash
+
+# kubeconfig-switcher.sh
+# A script to quickly switch between multiple kubeconfig files
+
+set -euo pipefail
+
+# Configuration
+CONFIGS_DIR="${HOME}/.kube/configs"
+DEFAULT_CONFIG="${HOME}/.kube/config"
+SCRIPT_NAME="$(basename "$0")"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Print usage information
+usage() {
+    cat << EOF
+Usage: $SCRIPT_NAME [OPTIONS] [CONFIG_NAME]
+
+A tool to quickly switch between multiple kubeconfig files.
+
+Arguments:
+    CONFIG_NAME    Name of the kubeconfig file to switch to (without extension)
+
+Options:
+    -l, --list     List all available kubeconfig files
+    -c, --current  Show the currently active kubeconfig
+    -h, --help     Show this help message
+    -i, --interactive
+                  Interactive mode with fuzzy selection (requires fzf)
+
+Examples:
+    $SCRIPT_NAME                    # Interactive mode
+    $SCRIPT_NAME prod              # Switch to prod config
+    $SCRIPT_NAME --list            # List all configs
+    $SCRIPT_NAME --current         # Show current config
+    $SCRIPT_NAME --interactive     # Interactive mode with fzf
+
+Configuration:
+    Configs directory: $CONFIGS_DIR
+    Default config:   $DEFAULT_CONFIG
+
+The script will look for kubeconfig files in ~/.kube/configs/ directory.
+Files should be named with .yaml or .yml extension (e.g., prod.yaml, dev.yml).
+
+EOF
+}
+
+# Print colored output
+print_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+}
+
+# Check if required tools are available
+check_dependencies() {
+    local missing_tools=()
+    
+    if [[ "${1:-}" == "interactive" ]] && ! command -v fzf >/dev/null 2>&1; then
+        missing_tools+=("fzf")
+    fi
+    
+    if [[ ${#missing_tools[@]} -gt 0 ]]; then
+        print_error "Missing required tools: ${missing_tools[*]}"
+        print_info "Install missing tools and try again"
+        exit 1
+    fi
+}
+
+# Ensure configs directory exists
+ensure_configs_dir() {
+    if [[ ! -d "$CONFIGS_DIR" ]]; then
+        print_warning "Configs directory does not exist: $CONFIGS_DIR"
+        print_info "Creating configs directory..."
+        mkdir -p "$CONFIGS_DIR"
+        print_success "Created configs directory: $CONFIGS_DIR"
+        print_info "Place your kubeconfig files in this directory with .yaml or .yml extension"
+    fi
+}
+
+# Get list of available kubeconfig files
+get_available_configs() {
+    if [[ ! -d "$CONFIGS_DIR" ]]; then
+        return 0
+    fi
+    
+    find "$CONFIGS_DIR" -maxdepth 1 -type f \( -name "*.yaml" -o -name "*.yml" \) -exec basename {} \; |
+    sed 's/\.\(yaml\|yml\)$//' |
+    sort
+}
+
+# Show currently active kubeconfig
+show_current_config() {
+    local current_config=""
+    
+    # Check KUBECONFIG environment variable
+    if [[ -n "${KUBECONFIG:-}" ]]; then
+        current_config="$KUBECONFIG"
+        print_info "Current KUBECONFIG environment variable: $current_config"
+    fi
+    
+    # Check if ~/.kube/config exists and is a symlink
+    if [[ -L "$DEFAULT_CONFIG" ]]; then
+        local target="$(readlink "$DEFAULT_CONFIG")"
+        print_info "Default config symlink points to: $target"
+        
+        # Extract config name if it's in the configs directory
+        if [[ "$target" == "$CONFIGS_DIR"* ]]; then
+            local config_name="$(basename "$target" | sed 's/\.\(yaml\|yml\)$//')"
+            print_success "Active config: $config_name"
+        fi
+    elif [[ -f "$DEFAULT_CONFIG" ]]; then
+        print_info "Using default config file: $DEFAULT_CONFIG"
+    else
+        print_warning "No kubeconfig file found"
+    fi
+}
+
+# List all available configs
+list_configs() {
+    ensure_configs_dir
+    
+    local configs
+    configs=$(get_available_configs)
+    
+    if [[ -z "$configs" ]]; then
+        print_warning "No kubeconfig files found in $CONFIGS_DIR"
+        print_info "Add kubeconfig files with .yaml or .yml extension to the configs directory"
+        return 0
+    fi
+    
+    print_info "Available kubeconfig files:"
+    echo
+    
+    local current_config_name=""
+    if [[ -L "$DEFAULT_CONFIG" ]]; then
+        local target="$(readlink "$DEFAULT_CONFIG")"
+        if [[ "$target" == "$CONFIGS_DIR"* ]]; then
+            current_config_name="$(basename "$target" | sed 's/\.\(yaml\|yml\)$//')"
+        fi
+    fi
+    
+    while IFS= read -r config; do
+        if [[ "$config" == "$current_config_name" ]]; then
+            echo -e "  ${GREEN}*${NC} $config (active)"
+        else
+            echo -e "    $config"
+        fi
+    done <<< "$configs"
+    
+    echo
+    print_info "Use '$SCRIPT_NAME <config_name>' to switch to a config"
+}
+
+# Switch to a specific config
+switch_config() {
+    local config_name="$1"
+    ensure_configs_dir
+    
+    # Find the config file
+    local config_file=""
+    if [[ -f "$CONFIGS_DIR/$config_name.yaml" ]]; then
+        config_file="$CONFIGS_DIR/$config_name.yaml"
+    elif [[ -f "$CONFIGS_DIR/$config_name.yml" ]]; then
+        config_file="$CONFIGS_DIR/$config_name.yml"
+    else
+        print_error "Config file not found: $config_name"
+        print_info "Available configs:"
+        list_configs
+        return 1
+    fi
+    
+    # Validate that the config file is a valid YAML
+    if ! command -v yq >/dev/null 2>&1; then
+        print_warning "yq not found, skipping YAML validation"
+    else
+        if ! yq eval '.' "$config_file" >/dev/null 2>&1; then
+            print_error "Invalid YAML file: $config_file"
+            return 1
+        fi
+    fi
+    
+    # Backup existing config if it exists and is not a symlink
+    if [[ -f "$DEFAULT_CONFIG" && ! -L "$DEFAULT_CONFIG" ]]; then
+        local backup_file="${DEFAULT_CONFIG}.backup.$(date +%Y%m%d_%H%M%S)"
+        print_warning "Backing up existing config to: $backup_file"
+        cp "$DEFAULT_CONFIG" "$backup_file"
+    fi
+    
+    # Create symlink to the selected config
+    ln -sf "$config_file" "$DEFAULT_CONFIG"
+    
+    print_success "Switched to config: $config_name"
+    print_info "Active config file: $DEFAULT_CONFIG -> $config_file"
+    
+    # Update KUBECONFIG environment variable for current session
+    export KUBECONFIG="$DEFAULT_CONFIG"
+    print_info "KUBECONFIG environment variable set for current session"
+    
+    # Test the config by trying to get clusters
+    if command -v kubectl >/dev/null 2>&1; then
+        print_info "Testing new kubeconfig..."
+        if kubectl cluster-info >/dev/null 2>&1; then
+            print_success "Kubeconfig is working correctly"
+        else
+            print_warning "Kubeconfig test failed - check if the config is valid"
+        fi
+    else
+        print_warning "kubectl not found, skipping connectivity test"
+    fi
+}
+
+# Interactive mode with fzf
+interactive_mode() {
+    check_dependencies "interactive"
+    ensure_configs_dir
+    
+    local configs
+    configs=$(get_available_configs)
+    
+    if [[ -z "$configs" ]]; then
+        print_warning "No kubeconfig files found in $CONFIGS_DIR"
+        return 0
+    fi
+    
+    local current_config_name=""
+    if [[ -L "$DEFAULT_CONFIG" ]]; then
+        local target="$(readlink "$DEFAULT_CONFIG")"
+        if [[ "$target" == "$CONFIGS_DIR"* ]]; then
+            current_config_name="$(basename "$target" | sed 's/\.\(yaml\|yml\)$//')"
+        fi
+    fi
+    
+    # Use fzf for selection
+    local selected_config
+    selected_config=$(echo "$configs" | \
+        while IFS= read -r config; do
+            if [[ "$config" == "$current_config_name" ]]; then
+                echo -e "$config (current)"
+            else
+                echo "$config"
+            fi
+        done | \
+        fzf --prompt="Select kubeconfig > " \
+            --height=40% \
+            --layout=reverse \
+            --border \
+            --ansi \
+            --expect=ctrl-c,esc)
+    
+    # Handle fzf exit codes
+    local exit_code=$?
+    if [[ $exit_code -ne 0 ]]; then
+        print_info "Selection cancelled"
+        return 0
+    fi
+    
+    # Extract the config name (remove "(current)" suffix if present)
+    selected_config=$(echo "$selected_config" | sed 's/ (current)$//')
+    
+    if [[ -n "$selected_config" ]]; then
+        switch_config "$selected_config"
+    fi
+}
+
+# Main script logic
+main() {
+    # Parse command line arguments
+    case "${1:-}" in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -l|--list)
+            list_configs
+            exit 0
+            ;;
+        -c|--current)
+            show_current_config
+            exit 0
+            ;;
+        -i|--interactive)
+            interactive_mode
+            exit 0
+            ;;
+        "")
+            # No arguments, default to interactive mode
+            interactive_mode
+            ;;
+        -*)
+            print_error "Unknown option: $1"
+            usage
+            exit 1
+            ;;
+        *)
+            # Assume it's a config name
+            switch_config "$1"
+            ;;
+    esac
+}
+
+# Run main function with all arguments
+main "$@"

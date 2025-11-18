@@ -17,7 +17,7 @@ A bash script to quickly switch between multiple kubeconfig files stored in `~/.
 
 1. Download the script:
    ```bash
-   curl -O https://raw.githubusercontent.com/your-repo/kubeconfig-switcher/main/kctx
+   curl -O https://raw.githubusercontent.com/hungthai1401/kctx/main/kctx
    ```
 
 2. Make it executable:

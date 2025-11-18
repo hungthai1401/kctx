@@ -100,7 +100,7 @@ get_available_configs() {
         return 0
     fi
     
-    find "$CONFIGS_DIR" -maxdepth 1 -type f \( -name "*.yaml" -o -name "*.yml" \) -exec basename {} \; |
+    find "$CONFIGS_DIR" -maxdepth 1 \( -type f -o -type l \) \( -name "*.yaml" -o -name "*.yml" \) -exec basename {} \; |
     sed 's/\.\(yaml\|yml\)$//' |
     sort
 }
@@ -173,11 +173,11 @@ switch_config() {
     local config_name="$1"
     ensure_configs_dir
     
-    # Find the config file
+    # Find the config file (check both regular files and symlinks)
     local config_file=""
-    if [[ -f "$CONFIGS_DIR/$config_name.yaml" ]]; then
+    if [[ -f "$CONFIGS_DIR/$config_name.yaml" ]] || [[ -L "$CONFIGS_DIR/$config_name.yaml" ]]; then
         config_file="$CONFIGS_DIR/$config_name.yaml"
-    elif [[ -f "$CONFIGS_DIR/$config_name.yml" ]]; then
+    elif [[ -f "$CONFIGS_DIR/$config_name.yml" ]] || [[ -L "$CONFIGS_DIR/$config_name.yml" ]]; then
         config_file="$CONFIGS_DIR/$config_name.yml"
     else
         print_error "Config file not found: $config_name"

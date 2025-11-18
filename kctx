@@ -101,7 +101,7 @@ get_available_configs() {
     fi
     
     find "$CONFIGS_DIR" -maxdepth 1 \( -type f -o -type l \) \( -name "*.yaml" -o -name "*.yml" \) -exec basename {} \; |
-    sed 's/\.\(yaml\|yml\)$//' |
+    sed -E 's/\.(yaml|yml)$//' |
     sort
 }
 
@@ -122,7 +122,7 @@ show_current_config() {
         
         # Extract config name if it's in the configs directory
         if [[ "$target" == "$CONFIGS_DIR"* ]]; then
-            local config_name="$(basename "$target" | sed 's/\.\(yaml\|yml\)$//')"
+            local config_name="$(basename "$target" | sed -E 's/\.(yaml|yml)$//')"
             print_success "Active config: $config_name"
         fi
     elif [[ -f "$DEFAULT_CONFIG" ]]; then
@@ -152,7 +152,7 @@ list_configs() {
     if [[ -L "$DEFAULT_CONFIG" ]]; then
         local target="$(readlink "$DEFAULT_CONFIG")"
         if [[ "$target" == "$CONFIGS_DIR"* ]]; then
-            current_config_name="$(basename "$target" | sed 's/\.\(yaml\|yml\)$//')"
+            current_config_name="$(basename "$target" | sed -E 's/\.(yaml|yml)$//')"
         fi
     fi
     
@@ -236,7 +236,7 @@ interactive_mode() {
     if [[ -L "$DEFAULT_CONFIG" ]]; then
         local target="$(readlink "$DEFAULT_CONFIG")"
         if [[ "$target" == "$CONFIGS_DIR"* ]]; then
-            current_config_name="$(basename "$target" | sed 's/\.\(yaml\|yml\)$//')"
+            current_config_name="$(basename "$target" | sed -E 's/\.(yaml|yml)$//')"
         fi
     fi
     
@@ -265,7 +265,7 @@ interactive_mode() {
     fi
     
     # Extract the config name (remove "(current)" suffix and extension if present)
-    selected_config=$(echo "$selected_config" | sed 's/ (current)$//' | sed 's/\.\(yaml\|yml\)$//')
+    selected_config=$(echo "$selected_config" | sed 's/ (current)$//' | sed -E 's/\.(yaml|yml)$//')
     
     if [[ -n "$selected_config" ]]; then
         switch_config "$selected_config"

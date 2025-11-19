@@ -85,7 +85,15 @@ check_dependencies() {
 
 # Ensure configs directory exists
 ensure_configs_dir() {
-    if [[ ! -d "$CONFIGS_DIR" ]]; then
+    # Check if CONFIGS_DIR is a symlink pointing to a directory
+    if [[ -L "$CONFIGS_DIR" ]]; then
+        # It's a symlink, check if the target exists and is a directory
+        local target_dir="$(readlink "$CONFIGS_DIR")"
+        if [[ ! -d "$CONFIGS_DIR" ]]; then
+            print_error "Configs symlink points to non-existent directory: $CONFIGS_DIR -> $target_dir"
+            return 1
+        fi
+    elif [[ ! -d "$CONFIGS_DIR" ]]; then
         print_warning "Configs directory does not exist: $CONFIGS_DIR"
         print_info "Creating configs directory..."
         mkdir -p "$CONFIGS_DIR"
@@ -96,13 +104,28 @@ ensure_configs_dir() {
 
 # Get list of available kubeconfig files
 get_available_configs() {
-    if [[ ! -d "$CONFIGS_DIR" ]]; then
+    # Check if configs directory exists (handle symlinks properly)
+    if [[ -L "$CONFIGS_DIR" ]]; then
+        if [[ ! -d "$CONFIGS_DIR" ]]; then
+            return 0
+        fi
+    elif [[ ! -d "$CONFIGS_DIR" ]]; then
         return 0
     fi
     
-    find "$CONFIGS_DIR" -maxdepth 1 \( -type f -o -type l \) \( -iname "*.yaml" -o -iname "*.yml" \) -exec basename {} \; |
-    sed -E 's/\.[Yy][Aa]?[Mm][Ll]$//' |
-    sort
+    # Try a simpler approach - directly use ls to get files
+    local configs
+    configs=$(ls "$CONFIGS_DIR"/*.{yaml,yml} 2>/dev/null || true)
+    
+    # If ls failed, fall back to find
+    if [[ -z "$configs" ]]; then
+        configs=$(find "$CONFIGS_DIR" -maxdepth 1 \( -type f -o -type l \) \( -iname "*.yaml" -o -iname "*.yml" \) 2>/dev/null | sort)
+    fi
+    
+    # Extract basenames and remove extensions
+    if [[ -n "$configs" ]]; then
+        printf '%s\n' "$configs" | sed -E 's|.*/||; s/\.[Yy][Aa]?[Mm][Ll]$//'
+    fi
 }
 
 # Resolve the actual config file path for a given config name
@@ -110,11 +133,28 @@ resolve_config_file() {
     local config_name="$1"
     local fallback=""
 
-    # Check if configs directory exists
-    if [[ ! -d "$CONFIGS_DIR" ]]; then
+    # Check if configs directory exists (handle symlinks properly)
+    if [[ -L "$CONFIGS_DIR" ]]; then
+        if [[ ! -d "$CONFIGS_DIR" ]]; then
+            return 1
+        fi
+    elif [[ ! -d "$CONFIGS_DIR" ]]; then
         return 1
     fi
 
+    # Try a simpler approach with ls first
+    local yaml_file="$CONFIGS_DIR/$config_name.yaml"
+    local yml_file="$CONFIGS_DIR/$config_name.yml"
+    
+    if [[ -f "$yaml_file" ]]; then
+        printf '%s\n' "$yaml_file"
+        return 0
+    elif [[ -f "$yml_file" ]]; then
+        printf '%s\n' "$yml_file"
+        return 0
+    fi
+
+    # Fall back to find if ls didn't work
     while IFS= read -r -d '' path; do
         local filename
         filename="$(basename "$path")"

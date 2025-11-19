@@ -48,6 +48,12 @@ Configuration:
 The script will look for kubeconfig files in ~/.kube/configs/ directory.
 Files should be named with .yaml or .yml extension (e.g., prod.yaml, dev.yml).
 
+Nested directories are supported for organizing configs:
+    ~/.kube/configs/dev/cluster1.yaml
+    ~/.kube/configs/prod/main.yaml
+
+Use 'kctx dev/cluster1' to switch to nested configs.
+
 EOF
 }
 
@@ -113,18 +119,14 @@ get_available_configs() {
         return 0
     fi
     
-    # Try a simpler approach - directly use ls to get files
+    # Use find to recursively search for config files with proper escaping
     local configs
-    configs=$(ls "$CONFIGS_DIR"/*.{yaml,yml} 2>/dev/null || true)
+    configs=$(cd "$CONFIGS_DIR" && find . \( -type f -o -type l \) \( -iname "*.yaml" -o -iname "*.yml" \) 2>/dev/null | sort)
     
-    # If ls failed, fall back to find
-    if [[ -z "$configs" ]]; then
-        configs=$(find "$CONFIGS_DIR" -maxdepth 1 \( -type f -o -type l \) \( -iname "*.yaml" -o -iname "*.yml" \) 2>/dev/null | sort)
-    fi
-    
-    # Extract basenames and remove extensions
+    # Remove the leading "./" and extensions
     if [[ -n "$configs" ]]; then
-        printf '%s\n' "$configs" | sed -E 's|.*/||; s/\.[Yy][Aa]?[Mm][Ll]$//'
+        printf '%s\n' "$configs" | \
+            sed -E 's|^\./||; s/\.[Yy][Aa]?[Mm][Ll]$//'
     fi
 }
 
@@ -142,7 +144,7 @@ resolve_config_file() {
         return 1
     fi
 
-    # Try a simpler approach with ls first
+    # First try to match the full path (for nested configs)
     local yaml_file="$CONFIGS_DIR/$config_name.yaml"
     local yml_file="$CONFIGS_DIR/$config_name.yml"
     
@@ -153,8 +155,8 @@ resolve_config_file() {
         printf '%s\n' "$yml_file"
         return 0
     fi
-
-    # Fall back to find if ls didn't work
+    
+    # If not found as full path, search for files with matching basenames (backward compatibility)
     while IFS= read -r -d '' path; do
         local filename
         filename="$(basename "$path")"
@@ -173,7 +175,7 @@ resolve_config_file() {
                 fallback="$path"
             fi
         fi
-    done < <(find "$CONFIGS_DIR" -maxdepth 1 \( -type f -o -type l \) \( -iname "*.yaml" -o -iname "*.yml" \) -print0)
+    done < <(find "$CONFIGS_DIR" \( -type f -o -type l \) \( -iname "*.yaml" -o -iname "*.yml" \) -print0)
 
     if [[ -n "$fallback" ]]; then
         printf '%s\n' "$fallback"
@@ -198,9 +200,10 @@ show_current_config() {
         local target="$(readlink "$DEFAULT_CONFIG")"
         print_info "Default config symlink points to: $target"
         
-        # Extract config name if it's in the configs directory
+        # Extract config name if it's in the configs directory (including nested paths)
         if [[ "$target" == "$CONFIGS_DIR"* ]]; then
-            local config_name="$(basename "$target" | sed -E 's/\.[Yy][Aa]?[Mm][Ll]$//')"
+            local relative_path="${target#$CONFIGS_DIR/}"
+            local config_name="$(echo "$relative_path" | sed -E 's/\.[Yy][Aa]?[Mm][Ll]$//')"
             print_success "Active config: $config_name"
         fi
     elif [[ -f "$DEFAULT_CONFIG" ]]; then
@@ -226,24 +229,30 @@ list_configs() {
     print_info "Available kubeconfig files:"
     echo
     
+    # Get the current config name with full path
     local current_config_name=""
     if [[ -L "$DEFAULT_CONFIG" ]]; then
         local target="$(readlink "$DEFAULT_CONFIG")"
         if [[ "$target" == "$CONFIGS_DIR"* ]]; then
-            current_config_name="$(basename "$target" | sed -E 's/\.[Yy][Aa]?[Mm][Ll]$//')"
+            local relative_path="${target#$CONFIGS_DIR/}"
+            current_config_name="$(echo "$relative_path" | sed -E 's/\.[Yy][Aa]?[Mm][Ll]$//')"
         fi
     fi
 
-    while IFS= read -r config; do
-        if [[ "$config" == "$current_config_name" ]]; then
-            echo -e "  ${GREEN}*${NC} $config (active)"
-        else
-            echo -e "    $config"
+    # Sort configs and display with directory structure
+    printf '%s\n' "$configs" | sort | while IFS= read -r config; do
+        if [[ -n "$config" ]]; then
+            if [[ "$config" == "$current_config_name" ]]; then
+                echo -e "  ${GREEN}*${NC} $config (active)"
+            else
+                echo -e "    $config"
+            fi
         fi
-    done <<< "$configs"
+    done
     
     echo
     print_info "Use '$SCRIPT_NAME <config_name>' to switch to a config"
+    print_info "For nested configs, use the full path (e.g., 'dev/cluster1')"
 }
 
 # Switch to a specific config
@@ -263,7 +272,21 @@ switch_config() {
     local available_configs
     available_configs=$(get_available_configs)
     
-    if ! grep -Fxq "$clean_config_name" <<< "$available_configs"; then
+    # Check for exact match or basename match (for backward compatibility)
+    local found_config=""
+    if grep -Fxq "$clean_config_name" <<< "$available_configs"; then
+        found_config="$clean_config_name"
+    else
+        # Check for basename match (backward compatibility)
+        while IFS= read -r config; do
+            if [[ "$(basename "$config")" == "$clean_config_name" ]]; then
+                found_config="$config"
+                break
+            fi
+        done <<< "$available_configs"
+    fi
+    
+    if [[ -z "$found_config" ]]; then
         print_error "Config file not found: $config_name"
         print_info "Available configs:"
         list_configs
@@ -272,7 +295,7 @@ switch_config() {
     
     # Resolve the actual config file path
     local config_file=""
-    if ! config_file=$(resolve_config_file "$clean_config_name"); then
+    if ! config_file=$(resolve_config_file "$found_config"); then
         print_error "Config file disappeared: $config_name"
         print_info "Run '$SCRIPT_NAME --list' to verify available configs"
         return 1
@@ -291,7 +314,7 @@ switch_config() {
     # Create symlink to the selected config
     ln -sf "$config_file" "$DEFAULT_CONFIG"
     
-    print_success "Switched to config: $clean_config_name"
+    print_success "Switched to config: $found_config"
     print_info "Active config file: $DEFAULT_CONFIG -> $config_file"
     
     # Update KUBECONFIG environment variable for current session
@@ -324,22 +347,26 @@ interactive_mode() {
         return 0
     fi
     
+    # Get the current config name with full path
     local current_config_name=""
     if [[ -L "$DEFAULT_CONFIG" ]]; then
         local target="$(readlink "$DEFAULT_CONFIG")"
         if [[ "$target" == "$CONFIGS_DIR"* ]]; then
-            current_config_name="$(basename "$target" | sed -E 's/\.[Yy][Aa]?[Mm][Ll]$//')"
+            local relative_path="${target#$CONFIGS_DIR/}"
+            current_config_name="$(echo "$relative_path" | sed -E 's/\.[Yy][Aa]?[Mm][Ll]$//')"
         fi
     fi
     
     # Use fzf for selection
     local fzf_output
-    fzf_output=$(echo "$configs" | \
+    fzf_output=$(echo "$configs" | sort | \
         while IFS= read -r config; do
-            if [[ "$config" == "$current_config_name" ]]; then
-                echo -e "$config (current)"
-            else
-                echo "$config"
+            if [[ -n "$config" ]]; then
+                if [[ "$config" == "$current_config_name" ]]; then
+                    echo -e "$config (current)"
+                else
+                    echo "$config"
+                fi
             fi
         done | \
         fzf --prompt="Select kubeconfig > " \
@@ -366,8 +393,8 @@ interactive_mode() {
         return 0
     fi
     
-    # Extract the config name (remove "(current)" suffix and extension if present)
-    selected_config=$(echo "$selected_config" | sed 's/ (current)$//' | sed -E 's/\.[Yy][Aa]?[Mm][Ll]$//')
+    # Extract the config name (remove "(current)" suffix)
+    selected_config=$(echo "$selected_config" | sed 's/ (current)$//')
     
     if [[ -n "$selected_config" ]]; then
         switch_config "$selected_config"

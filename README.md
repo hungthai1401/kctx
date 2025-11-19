@@ -8,6 +8,8 @@ A bash script to quickly switch between multiple kubeconfig files stored in `~/.
 - Switch between configs with simple commands
 - Interactive mode with fuzzy selection (requires fzf)
 - Display currently active config
+- Support for nested directory organization
+- Support for symlinked configs directory and config files
 - Automatic backup of existing configs
 - YAML validation (optional, requires yq)
 - Connectivity testing with kubectl (optional)
@@ -27,7 +29,7 @@ A bash script to quickly switch between multiple kubeconfig files stored in `~/.
 
 3. Move it to a directory in your PATH (optional):
    ```bash
-   mv kctx /usr/local/bin/kctx
+   sudo mv kctx /usr/local/bin/kctx
    ```
 
 ## Setup
@@ -37,13 +39,41 @@ A bash script to quickly switch between multiple kubeconfig files stored in `~/.
    mkdir -p ~/.kube/configs
    ```
 
-2. Place your kubeconfig files in `~/.kube/configs/` with `.yaml` or `.yml` extensions:
+2. Place your kubeconfig files in `~/.kube/configs/` with `.yaml` or `.yml` extensions. You can organize them in a flat structure or use nested directories:
+   
+   **Flat structure:**
    ```
    ~/.kube/configs/
    ├── prod.yaml
    ├── staging.yaml
    ├── dev.yaml
    └── test.yml
+   ```
+   
+   **Nested structure (recommended for organization):**
+   ```
+   ~/.kube/configs/
+   ├── prod/
+   │   ├── main.yaml
+   │   └── backup.yaml
+   ├── staging/
+   │   ├── cluster1.yaml
+   │   └── cluster2.yaml
+   ├── dev/
+   │   ├── backend.yaml
+   │   └── frontend.yaml
+   └── local.yaml
+   ```
+   
+   **With symlinks:**
+   ```
+   ~/.kube/configs/ -> /shared/kubeconfigs/  # Symlinked configs directory
+   /shared/kubeconfigs/
+   ├── prod/ -> /configs/production/         # Symlinked subdirectory
+   ├── dev/
+   │   ├── backend.yaml
+   │   └── frontend.yaml -> ../shared-dev.yaml  # Symlinked file
+   └── staging.yaml
    ```
 
 ## Usage
@@ -54,10 +84,13 @@ A bash script to quickly switch between multiple kubeconfig files stored in `~/.
 # Interactive mode (default)
 kctx
 
-# Switch to a specific config
+# Switch to a specific config (flat structure)
 kctx prod
 
-# List all available configs
+# Switch to a nested config (full path)
+kctx dev/backend
+
+# List all available configs (shows nested paths)
 kctx --list
 
 # Show current active config
@@ -90,9 +123,11 @@ The script switches kubeconfig files by creating a symbolic link from `~/.kube/c
 
 ## Configuration
 
-- **Configs directory**: `~/.kube/configs`
+- **Configs directory**: `~/.kube/configs` (can be a symlink)
 - **Default config location**: `~/.kube/config`
 - **Supported file extensions**: `.yaml`, `.yml`
+- **Nested directories**: Supported for organizing configs
+- **Symlinks**: Full support for symlinked configs directory and config files
 
 ## Optional Dependencies
 
@@ -100,33 +135,15 @@ The script switches kubeconfig files by creating a symbolic link from `~/.kube/c
 - **yq**: For YAML validation of config files
 - **kubectl**: For connectivity testing after switching
 
-## Examples
-
-### Setting up multiple environments
-
-```bash
-# Create configs directory
-mkdir -p ~/.kube/configs
-
-# Copy your kubeconfig files
-cp production-kubeconfig.yaml ~/.kube/configs/prod.yaml
-cp staging-kubeconfig.yaml ~/.kube/configs/staging.yaml
-cp development-kubeconfig.yaml ~/.kube/configs/dev.yaml
-
-# Switch to production
-kctx prod
-
-# List all configs
-kctx --list
-```
 
 ## Error Handling
 
 The script includes comprehensive error handling for:
 
 - Missing configs directory (creates automatically)
+- Broken symlinks in configs directory and config files (with helpful error messages)
 - Invalid config files (YAML validation if yq is available)
-- Non-existent config files
+- Non-existent config files (including nested paths)
 - Invalid command line arguments
 - Missing optional dependencies
 
@@ -135,6 +152,16 @@ The script includes comprehensive error handling for:
 ### "No kubeconfig files found"
 - Make sure you have files in `~/.kube/configs/` with `.yaml` or `.yml` extensions
 - Check that the files are readable and valid YAML
+- Verify the configs directory exists or the symlink is valid
+
+### "Configs symlink points to non-existent directory"
+- Check if your `~/.kube/configs` symlink points to a valid directory
+- Update or recreate the symlink to point to the correct location
+
+### "Config file not found"
+- Use the full path for nested configs (e.g., `dev/cluster1` instead of just `cluster1`)
+- Verify the file exists with the correct extension (.yaml or .yml)
+- Check the file permissions
 
 ### "fzf not found"
 - Install fzf: `brew install fzf` (macOS) or `apt install fzf` (Ubuntu)
